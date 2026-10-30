@@ -1,0 +1,8 @@
+.streamlit/secrets.toml
+*.db
+__pycache__/
+.venv/
+venv/
+.pytest_cache/
+*.xlsx
+*.zip
