@@ -47,13 +47,20 @@ def test_register_flow_in_ui(demo_db):
     at.button[0].click().run()  # Comenzar registro
     assert not at.exception
     assert at.session_state["reg_activity_id"]
-    for person in ("Ana Torres", "Pedro Salas"):
+    for person, minute in (("Ana Torres", 12), ("Pedro Salas", 25)):
         n = at.session_state["reg_form_n"]
         at.selectbox(key=f"reg_vol_{n}").set_value(person)
-        at.time_input(key=f"reg_arr_{n}").set_value(time(9, 21)).run()
-        save = next(b for b in at.button if b.label == "Guardar y registrar siguiente")
-        save.click().run()
+        at.time_input(key=f"reg_arr_{n}").set_value(time(9, minute)).run()
+        add = next(b for b in at.button if b.label == "Agregar a la lista")
+        add.click().run()
         assert not at.exception, [e.message for e in at.exception]
         assert at.session_state["reg_form_n"] == n + 1  # formulario listo para el siguiente
-    assert any("Pedro Salas" in s.value for s in at.success)
-    assert "**Registrados en esta actividad · 2**" in [m.value for m in at.markdown]
+    assert len(at.session_state["reg_draft"]) == 2
+    assert "**Ya guardados en esta actividad · 0**" in [m.value for m in at.markdown]  # aún nada guardado
+
+    save = next(b for b in at.button if b.label == "Guardar 2 registro(s)")
+    save.click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert at.session_state["reg_draft"] == []
+    assert any("Se guardaron 2 tardanza(s) por S/ 3.00" in s.value for s in at.success)
+    assert "**Ya guardados en esta actividad · 2**" in [m.value for m in at.markdown]

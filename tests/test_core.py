@@ -214,6 +214,36 @@ def test_volunteers_and_filters(app):
     assert "tardies.csv" in zipfile.ZipFile(io.BytesIO(backup)).namelist()
 
 
+def test_batch_save_is_all_or_nothing(app):
+    config, tardiness, payments, volunteers, reports, excel_export = app
+    act_id, *_ = tardiness.get_or_create_activity("Reunión", date(2026, 10, 1), time(9, 0))
+    entries = [{"name": "Ana", "arrival": time(9, 12)}, {"name": "Pedro", "arrival": time(9, 25)},
+               {"name": "María", "arrival": time(9, 35)}]
+    results = tardiness.register_tardies(act_id, entries, batch_token="b1")
+    assert [r["penalty"] for r in results] == [1, 2, 3]
+    # Reintento del mismo lote (p. ej. tras un corte de conexión): no duplica
+    assert all(r["duplicate"] for r in tardiness.register_tardies(act_id, entries, batch_token="b1"))
+    assert len(tardiness.fetch_records()) == 3
+
+    # Si un registro del lote falla, no se guarda ninguno
+    bad = [{"name": "Luis", "arrival": time(9, 15)}, {"name": "Ana", "arrival": time(9, 40)}]
+    with pytest.raises(tardiness.TardyError, match="Ana"):
+        tardiness.register_tardies(act_id, bad, batch_token="b2")
+    assert "Luis" not in set(tardiness.fetch_records()["volunteer"])
+    with pytest.raises(tardiness.TardyError):
+        tardiness.register_tardies(act_id, [{"name": "Rosa", "arrival": time(9, 15)},
+                                            {"name": "rosa", "arrival": time(9, 20)}])
+
+    # Consulta por fecha y PDF
+    import pdf_export
+
+    df = tardiness.fetch_records()
+    day = df[df["activity_date"].dt.date == date(2026, 10, 1)]
+    assert list(day.sort_values("arrival_time")["volunteer"]) == ["Ana", "Pedro", "María"]
+    content = pdf_export.build_pdf(day, "Reporte de tardanzas", "Fecha de actividad: 01/10/2026", "Voluntariado")
+    assert content.startswith(b"%PDF") and len(content) > 1000
+
+
 def test_future_dates_rejected(app):
     config, tardiness, *_ = app
     with pytest.raises(tardiness.TardyError):

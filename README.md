@@ -10,11 +10,11 @@ datos central: lo que registras en un dispositivo aparece en los demás.
 | Sección | Para qué sirve |
 |---|---|
 | **Inicio** | Indicadores (tardanzas, personas, generado, recaudado, pendiente, % de cobranza) y gráficos por periodo. |
-| **Registrar tardanza** | Eliges la actividad, fecha y hora de inicio **una sola vez** y registras a cada persona en segundos. El retraso y la penalidad se calculan solos. Admite fechas anteriores. |
-| **Historial de actividades** | Todas las tardanzas con filtros (voluntario, fecha, rango, mes, actividad, estado), detalle por actividad y por voluntario. Corrección y anulación con motivo. |
+| **Registrar tardanza** | Eliges la fecha, la actividad y la hora de inicio **una sola vez**, agregas a una lista a todos los que llegaron tarde (el retraso y la penalidad se calculan solos), revisas la lista y la guardas con un botón: se guardan todos juntos o ninguno. Admite fechas anteriores. |
+| **Historial de actividades** | **Por fecha:** eliges un día y ves a todos los que llegaron tarde con su deuda; marcas la casilla «Pagado» de quienes pagaron y confirmas. Además: todas las tardanzas con filtros (voluntario, fecha, rango, mes, actividad, estado), detalle por actividad y por voluntario, corrección y anulación con motivo. |
 | **Control de pagos** | Deudas pendientes, búsqueda por nombre, saldos por persona, pago de una o varias deudas a la vez (Yape, Plin, transferencia, efectivo), pagos parciales e historial de pagos con anulación. |
 | **Voluntarios** | Alta, búsqueda, edición de nombres, historial y totales (generado, pagado, pendiente) de cada persona. |
-| **Reportes y Excel** | Botón **«Descargar todos los registros en Excel»** (5 hojas), reportes filtrados y copia de seguridad completa. |
+| **Reportes y Excel** | Consulta por fecha, actividad, mes, rango, voluntario o estado, con descarga en **Excel y PDF**. Botón **«Descargar todos los registros en Excel»** (5 hojas), PDF completo y copia de seguridad. |
 | **Configuración** | Nombre de la app, hora de inicio predeterminada, tramos y montos de penalidad, recálculo opcional e historial de cambios. |
 
 ### Reglas de penalidad
@@ -159,6 +159,7 @@ tardiness.py        Actividades, registro, corrección, anulación y recálculo 
 payments.py         Pagos, anulaciones y estado de las deudas
 reports.py          Filtros, indicadores y resúmenes
 excel_export.py     Excel con formato y respaldo completo (.zip)
+pdf_export.py       Reportes en PDF
 ui.py               Estilos, tablas y filtros compartidos
 views/              Una página por sección del menú
 seed_demo.py        Datos ficticios para pruebas locales

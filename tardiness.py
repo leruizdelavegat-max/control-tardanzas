@@ -152,59 +152,86 @@ def register_tardy(
 
     Es idempotente respecto a ``client_token``: si el mismo envío llega dos veces
     (doble clic, reintento por mala conexión) no se crea un duplicado."""
-    settings = get_settings()
-    rules = settings["penalty_rules"]
+    rules = get_settings()["penalty_rules"]
     with db.transaction() as conn:
-        if client_token:
-            dup = conn.execute(
-                sa.select(db.tardies.c.id).where(db.tardies.c.client_token == client_token)
-            ).scalar()
-            if dup:
-                return {"id": dup, "duplicate": True}
+        return _insert_tardy(conn, _load_activity(conn, activity_id), rules, volunteer_name, arrival_time, notes,
+                             client_token)
 
-        activity = conn.execute(sa.select(db.activities).where(db.activities.c.id == activity_id)).mappings().first()
-        if not activity:
-            raise TardyError("La actividad seleccionada no existe.")
 
-        calc = calculate(activity["start_time"], arrival_time, rules)
-        if calc.delay_minutes == 0:
-            raise TardyError("La hora de llegada no es posterior a la hora de inicio: no hay tardanza que registrar.")
+def register_tardies(activity_id: int, entries: list[dict], batch_token: str | None = None) -> list[dict]:
+    """Guarda varias tardanzas de una misma actividad en una sola operación: se guardan
+    todas o ninguna. Cada entrada es {"name", "arrival", "notes"}."""
+    if not entries:
+        raise TardyError("La lista está vacía.")
+    keys = [db.normalize_key(e["name"]) for e in entries]
+    if len(set(keys)) != len(keys):
+        raise TardyError("Hay un voluntario repetido en la lista.")
+    rules = get_settings()["penalty_rules"]
+    with db.transaction() as conn:
+        activity = _load_activity(conn, activity_id)
+        results = []
+        for i, entry in enumerate(entries):
+            token = f"{batch_token}-{i}" if batch_token else None
+            try:
+                results.append(_insert_tardy(conn, activity, rules, entry["name"], entry["arrival"],
+                                             entry.get("notes"), token))
+            except (TardyError, volunteers.VolunteerError) as exc:
+                raise TardyError(f"{entry['name']}: {exc}") from None
+    return results
 
-        volunteer_id, created = volunteers.get_or_create(conn, volunteer_name)
-        already = conn.execute(
-            sa.select(db.tardies.c.id).where(
-                db.tardies.c.activity_id == activity_id,
-                db.tardies.c.volunteer_id == volunteer_id,
-                db.tardies.c.status != db.STATUS_VOID,
-            )
-        ).scalar()
-        if already:
-            raise TardyError("Este voluntario ya tiene una tardanza registrada en esta actividad.")
 
-        now = now_lima()
-        tardy_id = conn.execute(
-            db.tardies.insert()
-            .values(
-                activity_id=activity_id,
-                volunteer_id=volunteer_id,
-                start_time=activity["start_time"],
-                arrival_time=arrival_time,
-                delay_minutes=calc.delay_minutes,
-                penalty=calc.penalty,
-                rules_snapshot=json.dumps(rules),
-                status=db.STATUS_PENDING,
-                notes=(notes or "").strip() or None,
-                registered_at=now,
-                updated_at=now,
-                client_token=client_token,
-            )
-            .returning(db.tardies.c.id)
-        ).scalar_one()
-        db.log_change(
-            conn, "tardanza", tardy_id, "registrar",
-            {"actividad": activity_id, "voluntario": volunteer_id, "llegada": arrival_time,
-             "retraso": calc.delay_minutes, "penalidad": calc.penalty},
+def _load_activity(conn: sa.Connection, activity_id: int):
+    activity = conn.execute(sa.select(db.activities).where(db.activities.c.id == activity_id)).mappings().first()
+    if not activity:
+        raise TardyError("La actividad seleccionada no existe.")
+    return activity
+
+
+def _insert_tardy(conn, activity, rules, volunteer_name, arrival_time, notes, client_token) -> dict:
+    if client_token:
+        dup = conn.execute(sa.select(db.tardies.c.id).where(db.tardies.c.client_token == client_token)).scalar()
+        if dup:
+            return {"id": dup, "duplicate": True}
+
+    calc = calculate(activity["start_time"], arrival_time, rules)
+    if calc.delay_minutes == 0:
+        raise TardyError("La hora de llegada no es posterior a la hora de inicio: no hay tardanza que registrar.")
+
+    volunteer_id, created = volunteers.get_or_create(conn, volunteer_name)
+    already = conn.execute(
+        sa.select(db.tardies.c.id).where(
+            db.tardies.c.activity_id == activity["id"],
+            db.tardies.c.volunteer_id == volunteer_id,
+            db.tardies.c.status != db.STATUS_VOID,
         )
+    ).scalar()
+    if already:
+        raise TardyError("Este voluntario ya tiene una tardanza registrada en esta actividad.")
+
+    now = now_lima()
+    tardy_id = conn.execute(
+        db.tardies.insert()
+        .values(
+            activity_id=activity["id"],
+            volunteer_id=volunteer_id,
+            start_time=activity["start_time"],
+            arrival_time=arrival_time,
+            delay_minutes=calc.delay_minutes,
+            penalty=calc.penalty,
+            rules_snapshot=json.dumps(rules),
+            status=db.STATUS_PENDING,
+            notes=(notes or "").strip() or None,
+            registered_at=now,
+            updated_at=now,
+            client_token=client_token,
+        )
+        .returning(db.tardies.c.id)
+    ).scalar_one()
+    db.log_change(
+        conn, "tardanza", tardy_id, "registrar",
+        {"actividad": activity["id"], "voluntario": volunteer_id, "llegada": arrival_time,
+         "retraso": calc.delay_minutes, "penalidad": calc.penalty},
+    )
     return {
         "id": tardy_id,
         "duplicate": False,

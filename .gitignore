@@ -1,4 +1,5 @@
 .streamlit/secrets.toml
+.claude/
 *.db
 __pycache__/
 .venv/
