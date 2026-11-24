@@ -40,6 +40,22 @@ def test_page_renders(demo_db, page):
     assert not at.exception, [e.message for e in at.exception]
 
 
+def test_connection_failure_hides_details(monkeypatch, caplog):
+    """Sin conexión, quien abre la página no ve datos del servidor; el detalle queda en el registro."""
+    monkeypatch.syspath_prepend(str(ROOT))
+    monkeypatch.setenv("DATABASE_URL", "postgresql://usuario_x:clave_x@127.0.0.1:1/base_x")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
+    at.run()
+    assert not at.exception
+    assert any("no está disponible" in e.value for e in at.error)
+    assert not at.text_input  # no se llega al formulario de acceso
+    visible = repr(at.main)
+    for secret in ("127.0.0.1", "usuario_x", "clave_x", "base_x", "psycopg2", "Traceback"):
+        assert secret not in visible
+    assert "127.0.0.1" in caplog.text
+    assert "clave_x" not in caplog.text
+
+
 def test_register_flow_in_ui(demo_db):
     at = AppTest.from_function(_run_page, args=("registrar",), default_timeout=60)
     at.run()

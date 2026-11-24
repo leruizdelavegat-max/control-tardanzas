@@ -3,6 +3,8 @@
 Ejecutar localmente:  streamlit run app.py
 """
 
+import logging
+
 import streamlit as st
 
 st.set_page_config(page_title="Control de Tardanzas", page_icon="⏱️", layout="wide")
@@ -21,10 +23,12 @@ try:
 except db.DatabaseConfigError as exc:
     st.error(f"**Base de datos no configurada.** {exc}")
     st.stop()
-except Exception as exc:  # conexión rechazada, credenciales erróneas, red, etc.
-    st.error("**No se pudo conectar con la base de datos.** Revisa `DATABASE_URL` y tu conexión a internet.")
-    with st.expander("Detalle técnico"):
-        st.code(str(exc))
+except Exception:  # conexión rechazada, credenciales erróneas, red, etc.
+    # Esta pantalla se ve sin iniciar sesión: el detalle va solo al registro del servidor
+    # (Streamlit Cloud → Manage app), porque revela el servidor y el usuario de la base.
+    logging.getLogger(__name__).exception("No se pudo conectar con la base de datos")
+    st.error("**La página no está disponible por el momento.** Inténtalo de nuevo en unos minutos.")
+    st.caption("Si eres el administrador, comprueba que el proyecto de Supabase no esté en pausa.")
     st.stop()
 
 if not auth.require_login(settings["app_name"]):
